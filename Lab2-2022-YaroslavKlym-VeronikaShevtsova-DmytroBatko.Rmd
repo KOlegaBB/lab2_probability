@@ -20,7 +20,7 @@ output:
 -   The **team id number** referred to in tasks is the **two-digit** ordinal number of your team on the list. Include the line **set.seed(team id number)** at the beginning of your code to make your calculations reproducible. Also observe that the answers **do** depend on this number!\
 -   Take into account that not complying with these instructions may result in point deduction regardless of whether or not your implementation is correct.
 
-### Task 1
+### Task 1 Dmytro Batko
 
 #### In this task, we discuss the $[7,4]$ Hamming code and investigate its reliability. That coding system can correct single errors in the transmission of $4$-bit messages and proceeds as follows:
 
@@ -75,12 +75,12 @@ G <- matrix(c(1, 1, 1, 0, 0, 0, 0,
 H <- t(matrix(c(1, 0, 1, 0, 1, 0, 1,
 		0, 1, 1, 0, 0, 1, 1,
 		0, 0, 0, 1, 1, 1, 1), nrow = 3, byrow = TRUE))
-# cat("The matrix G is: \n") 
-#G  
-#cat("The matrix H is: \n") 
-#H
-#cat("The product GH must be zero: \n")
-#(G%*%H) %%2
+cat("The matrix G is: \n") 
+G  
+cat("The matrix H is: \n") 
+H
+cat("The product GH must be zero: \n")
+(G%*%H) %%2
 ```
 
 #### Next, generate the messages
@@ -98,15 +98,66 @@ codewords <- (messages %*% G) %% 2
 #### Generate random errors; do not forget that they occur with probability $p$! Next, generate the received messages
 
 ```{r}
-#  errors <- ...
-#  received <-   
+main <- function(number) {
+  messages <- message_generator(number)
+  encoded_words <- (messages %*% G) %% 2
+
+  for (i in 1:number) {
+    for (j in 1:7) {
+      error_probability <- runif(1, min=0, max=1)
+      if (error_probability <= p) {
+        encoded_words[i, j] <- xor(encoded_words[i, j], 1)
+      }
+      else {
+        encoded_words[i, j] <- encoded_words[i, j]
+      }
+    }
+  }
+
+  decoded <- matrix(, nrow=number, ncol = 4)
+  for (i in 1:length(encoded_words[, 1])) {
+    syndrome_vector <- (encoded_words[i,]%*%H)%%2
+    if (syndrome_vector[1,1] + 2*syndrome_vector[1,2] + 4*syndrome_vector[1,3] != 0 && encoded_words[i, syndrome_vector[1,1] + 2*syndrome_vector[1,2] + 4*syndrome_vector[1,3]] == 1) {
+      encoded_words[i, syndrome_vector[1,1] + 2*syndrome_vector[1,2] + 4*syndrome_vector[1,3]] <- 0
+    }
+    else if (syndrome_vector[1,1] + 2*syndrome_vector[1,2] + 4*syndrome_vector[1,3] != 0 && encoded_words[i, syndrome_vector[1,1] + 2*syndrome_vector[1,2] + 4*syndrome_vector[1,3]] == 0) {
+      encoded_words[i, syndrome_vector[1,1] + 2*syndrome_vector[1,2] + 4*syndrome_vector[1,3]] <- 1
+    }
+    decoded[i, 1] <- encoded_words[i, 3]
+    decoded[i, 2] <- encoded_words[i, 5]
+    decoded[i, 3] <- encoded_words[i, 6]
+    decoded[i, 4] <- encoded_words[i, 7]
+  }
+  vector_correct <- c()
+  for (i in 1:length(decoded[, 1])) {
+    vector_comparing <- messages[i,] == decoded[i,]
+    vector_correct <- c(vector_correct, length(which(vector_comparing==TRUE)))
+  }
+  counter <- 0
+  for (i in vector_correct) {
+    if (i==4) {
+      counter <- counter + 1
+    }
+  }
+  return(list("vector_correct" = vector_correct, "counter" = counter/number))
+}
+main(1000)$counter
 ```
+
+```{r}
+hist(main(1000)$vector_correct,
+     xlim = c(0, 4),
+     xlab = "number of correct bits",
+     ylab = "number of messages",
+     main = "The number of correct bits in a decoded message",
+)
+```
+
+At first, it may seem that the random variable has binomial distribution. Indeed, it is not true. While decoding each bit we cannot confidently determine the probability that it will be decoded correctly if the message has more than one error.
 
 The next steps include detecting the errors in the received messages, correcting them, and then decoding the obtained messages. After this, you can continue with calculating all the quantities of interest
 
-**Do not forget to include several sentences summarizing your work and the conclusions you have made!**
-
-### Task 2.
+### Task 2. Yaroslav Klym
 
 #### In this task, we discuss a real-life process that is well modelled by a Poisson distribution. As you remember, a Poisson random variable describes occurrences of rare events, i.e., counts the number of successes in a large number of independent random experiments. One of the typical examples is the **radioactive decay** process.
 
@@ -297,7 +348,7 @@ while (TRUE){
 print(n - 1)
 ```
 
-### Task 3.
+### Task 3. Veronika Shevtsova
 
 #### In this task, we use the Central Limit Theorem approximation for continuous random variables.
 
