@@ -1,0 +1,434 @@
+---
+title: 'P&S-2022: Lab assignment 2'
+author: "Yaroslav Klym, Veronika Shevtsova, Dmytro Batko"
+output:
+  html_document:
+    df_print: paged
+---
+
+## General comments and instructions
+
+-   Complete solution will give you $\bf 4$ points (out of 100 total). Submission deadline is **23:59 of 06 November 2022**\
+-   The report must be prepared as an *R notebook*; you must submit to **cms** both the source *R notebook* **and** the generated html file\
+-   At the beginning of the notebook, provide a work-breakdown structure estimating efforts of each team member\
+-   For each task, include
+    -   problem formulation and discussion (what is a reasonable answer to discuss);\
+    -   the corresponding $\mathbf{R}$ code with comments (usually it is just a couple of lines long);\
+    -   the statistics obtained (like sample mean or anything else you use to complete the task) as well as histograms etc to illustrate your findings;\
+    -   justification of your solution (e.g. refer to the corresponding theorems from probability theory);\
+    -   conclusions (e.g. how reliable your answer is, does it agree with common sense expectations etc)\
+-   The **team id number** referred to in tasks is the **two-digit** ordinal number of your team on the list. Include the line **set.seed(team id number)** at the beginning of your code to make your calculations reproducible. Also observe that the answers **do** depend on this number!\
+-   Take into account that not complying with these instructions may result in point deduction regardless of whether or not your implementation is correct.
+
+### Task 1
+
+#### In this task, we discuss the $[7,4]$ Hamming code and investigate its reliability. That coding system can correct single errors in the transmission of $4$-bit messages and proceeds as follows:
+
+-   given a message $\mathbf{m} = (a_1 a_2 a_3 a_4)$, we first encode it to a $7$-bit *codeword* $\mathbf{c} = \mathbf{m}G = (x_1 x_2 x_3 x_4 x_5 x_6 x_7)$, where $G$ is a $4\times 7$ *generator* matrix\
+-   the codeword $\mathbf{c}$ is transmitted, and $\mathbf{r}$ is the received message\
+-   $\mathbf{r}$ is checked for errors by calculating the *syndrome vector* $\mathbf{z} := \mathbf{r} H$, for a $7 \times 3$ *parity-check* matrix $H$\
+-   if a single error has occurred in $\mathbf{r}$, then the binary $\mathbf{z} = (z_1 z_2 z_3)$ identifies the wrong bit no. $z_1 + 2 z_2 + 4z_3$; thus $(0 0 0)$ shows there was no error (or more than one), while $(1 1 0 )$ means the third bit (or more than one) got corrupted\
+-   if the error was identified, then we flip the corresponding bit in $\mathbf{r}$ to get the corrected $\mathbf{r}^* = (r_1 r_2 r_3 r_4 r_5 r_6 r_7)$;\
+-   the decoded message is then $\mathbf{m}^*:= (r_3r_5r_6r_7)$.
+
+#### The **generator** matrix $G$ and the **parity-check** matrix $H$ are given by
+
+$$  
+    G := 
+    \begin{pmatrix}
+        1 & 1 & 1 & 0 & 0 & 0 & 0 \\
+        1 & 0 & 0 & 1 & 1 & 0 & 0 \\
+        0 & 1 & 0 & 1 & 0 & 1 & 0 \\
+        1 & 1 & 0 & 1 & 0 & 0 & 1 \\
+    \end{pmatrix},
+ \qquad 
+    H^\top := \begin{pmatrix}
+        1 & 0 & 1 & 0 & 1 & 0 & 1 \\
+        0 & 1 & 1 & 0 & 0 & 1 & 1 \\
+        0 & 0 & 0 & 1 & 1 & 1 & 1
+    \end{pmatrix}
+$$
+
+#### Assume that each bit in the transmission $\mathbf{c} \mapsto \mathbf{r}$ gets corrupted independently of the others with probability $p = \mathtt{id}/100$, where $\mathtt{id}$ is your team number. Your task is the following one.
+
+1.  Simulate the encoding-transmission-decoding process $N$ times and find the estimate $\hat p$ of the probability $p^*$ of correct transmission of a single message $\mathbf{m}$. Comment why, for large $N$, $\hat p$ is expected to be close to $p^*$.\
+2.  By estimating the standard deviation of the corresponding indicator of success by the standard error of your sample and using the CLT, predict the \emph{confidence} interval $(p^*-\varepsilon, p^* + \varepsilon)$, in which the estimate $\hat p$ falls with probability at least $0.95$.\
+3.  What choice of $N$ guarantees that $\varepsilon \le 0.03$?\
+4.  Draw the histogram of the number $k = 0,1,2,3,4$ of errors while transmitting a $4$-digit binary message. Do you think it is one of the known distributions?
+
+#### You can (but do not have to) use the chunks we prepared for you
+
+#### First, we set the **id** of the team and define the probability $p$ and the generator and parity-check matrices $G$ and $H$
+
+```{r}
+# your team id number 
+                          ###
+id <- 3                  ### Change to the correct id!
+                          ###
+set.seed(id)
+p <- id/100
+# matrices G and H
+G <- matrix(c(1, 1, 1, 0, 0, 0, 0,
+		1, 0, 0, 1, 1, 0, 0,
+		0, 1, 0, 1, 0, 1, 0,
+		1, 1, 0, 1, 0, 0, 1), nrow = 4, byrow = TRUE)
+H <- t(matrix(c(1, 0, 1, 0, 1, 0, 1,
+		0, 1, 1, 0, 0, 1, 1,
+		0, 0, 0, 1, 1, 1, 1), nrow = 3, byrow = TRUE))
+# cat("The matrix G is: \n") 
+#G  
+#cat("The matrix H is: \n") 
+#H
+#cat("The product GH must be zero: \n")
+#(G%*%H) %%2
+```
+
+#### Next, generate the messages
+
+```{r}
+# generate N messages
+
+message_generator <- function(N) {
+  matrix(sample(c(0,1), 4*N, replace = TRUE), nrow = N)
+}  
+messages <- message_generator(100)
+codewords <- (messages %*% G) %% 2
+```
+
+#### Generate random errors; do not forget that they occur with probability $p$! Next, generate the received messages
+
+```{r}
+#  errors <- ...
+#  received <-   
+```
+
+The next steps include detecting the errors in the received messages, correcting them, and then decoding the obtained messages. After this, you can continue with calculating all the quantities of interest
+
+**Do not forget to include several sentences summarizing your work and the conclusions you have made!**
+
+### Task 2.
+
+#### In this task, we discuss a real-life process that is well modelled by a Poisson distribution. As you remember, a Poisson random variable describes occurrences of rare events, i.e., counts the number of successes in a large number of independent random experiments. One of the typical examples is the **radioactive decay** process.
+
+#### Consider a sample of radioactive element of mass $m$, which has a big *half-life period* $T$; it is vitally important to know the probability that during a one second period, the number of nuclei decays will not exceed some critical level $k$. This probability can easily be estimated using the fact that, given the *activity* ${\lambda}$ of the element (i.e., the probability that exactly one nucleus decays in one second) and the number $N$ of atoms in the sample, the random number of decays within a second is well modelled by Poisson distribution with parameter $\mu:=N\lambda$. Next, for the sample of mass $m$, the number of atoms is $N = \frac{m}{M} N_A$, where $N_A = 6 \times 10^{23}$ is the Avogadro constant, and $M$ is the molar (atomic) mass of the element. The activity of the element, $\lambda$, is $\log(2)/T$, where $T$ is measured in seconds.
+
+#### Assume that a medical laboratory receives $n$ samples of radioactive element ${{}^{137}}\mathtt{Cs}$ (used in radiotherapy) with half-life period $T = 30.1$ years and mass $m = \mathtt{team\, id \,number} \times 10^{-6}$ g each. Denote by $X_1,X_2,\dots,X_n$ the **i.i.d. r.v.**'s counting the number of decays in sample $i$ in one second.
+
+1.  Specify the parameter of the Poisson distribution of $X_i$ (you'll need the atomic mass of *Cesium-137*)\
+2.  Show that the distribution of the sample means of $X_1,\dots,X_n$ gets very close to a normal one as $n$ becomes large and identify that normal distribution. To this end,
+    -   simulate the realization $x_1,x_2,\dots,x_n$ of the $X_i$ and calculate the sample mean $s=\overline{\mathbf{x}}$;
+    -   repeat this $K$ times to get the sample $\mathbf{s}=(s_1,\dots,s_K)$ of means and form the empirical cumulative distribution function $\hat F_{\mathbf{s}}$ of $\mathbf{s}$;
+    -   identify $\mu$ and $\sigma^2$ such that the **c.d.f.** $F$ of $\mathscr{N}(\mu,\sigma^2)$ is close to the **e.c.d.f.** $\hat F_{\mathbf{s}}$ and plot both **c.d.f.**'s on one graph to visualize their proximity (use the proper scales!);
+    -   calculate the maximal difference between the two **c.d.f.**'s;
+    -   consider cases $n = 5$, $n = 10$, $n=50$ and comment on the results.\
+3.  Calculate the largest possible value of $n$, for which the total number of decays in one second is less than $8 \times 10^8$ with probability at least $0.95$. To this end,
+    -   obtain the theoretical bound on $n$ using Markov inequality, Chernoff bound and Central Limit Theorem, and compare the results;\
+    -   simulate the realization $x_1,x_2,\dots,x_n$ of the $X_i$ and calculate the sum $s=x_1 + \cdots +x_n$;
+    -   repeat this $K$ times to get the sample $\mathbf{s}=(s_1,\dots,s_K)$ of sums;
+    -   calculate the number of elements of the sample which are less than critical value ($8 \times 10^8$) and calculate the empirical probability; comment whether it is close to the desired level $0.95$
+
+### Part 1.
+
+Specifies parameter of the Poisson distribution of $X_1$ using formulas
+
+```{r}
+id <- 3
+set.seed(id)
+half_life <- 30.1 * 365 * 24 * 60 * 60
+lambda <- log(2) / half_life
+mass <- id * 10 ** (-6)
+molar_mass <- 137
+avogadro <- 6 * 10 ** 23
+N <- mass / molar_mass * avogadro
+mu <- N * lambda
+```
+
+### Part 2.
+
+Creates sample of K = 1000 means for n=5, n=10, n=50
+
+```{r}
+K <- 1e3
+n <- 5
+sample_means_5 <- colMeans(matrix(rpois(n*K, lambda = mu), nrow=n))
+n <- 10
+sample_means_10 <- colMeans(matrix(rpois(n*K, lambda = mu), nrow=n))
+n <- 50
+sample_means_50 <- colMeans(matrix(rpois(n*K, lambda = mu), nrow=n))
+```
+
+Find $\mu$ and $\sigma$ for Normal distributions for n=5, n=10, n=50
+
+```{r}
+mu_5 <- mean(sample_means_5)
+sigma_5 <- sd(sample_means_5)
+mu_10 <- mean(sample_means_10)
+sigma_10 <- sd(sample_means_10)
+mu_50 <- mean(sample_means_50)
+sigma_50 <- sd(sample_means_50)
+```
+
+Plot e.c.d.f and c.d.f on graph and find max difference between them
+
+```{r}
+xlims_5 <- c(mu_5-3*sigma_5,mu_5+3*sigma_5)
+Fs_5 <- ecdf(sample_means_5)
+xlims_10 <- c(mu_10-3*sigma_10,mu_5+3*sigma_10)
+Fs_10 <- ecdf(sample_means_10)
+xlims_50 <- c(mu_50-3*sigma_50,mu_50+3*sigma_50)
+Fs_50 <- ecdf(sample_means_50)
+curve(Fs_5, 
+     xlim = xlims_5, 
+     ylim = c(0,1),
+     col = "blue",
+     lwd = 2,
+     main = "Comparison of ecdf and cdf")
+curve(pnorm(x, mean = mu_5, sd = sigma_5), col = "red", lwd = 2, add = TRUE)
+
+curve(Fs_10,
+     xlim = xlims_10, 
+     ylim = c(0,1),
+     col = "green",
+     lwd = 2,
+     main = "Comparison of ecdf and cdf")
+curve(pnorm(x, mean = mu_10, sd = sigma_10), col = "red", lwd = 2, add = TRUE)
+
+curve(Fs_50,     
+     xlim = xlims_50, 
+     ylim = c(0,1), 
+     col = "yellow",
+     lwd = 2,
+     main = "Comparison of ecdf and cdf")
+curve(pnorm(x, mean = mu_50, sd = sigma_50), col = "red", lwd = 2, add = TRUE)
+
+t <- seq(mu_5-3*sigma_5,mu_5+3*sigma_5, length=200)
+normal_dist <- pnorm(t, mean = mu_5, sd = sigma_5)
+max_dif <- max(abs(Fs_5(t) - normal_dist))
+print(max_dif)
+
+t <- seq(mu_10-3*sigma_10,mu_10+3*sigma_10, length=200)
+normal_dist <- pnorm(t, mean = mu_10, sd = sigma_10)
+max_dif <- max(abs(Fs_10(t) - normal_dist))
+print(max_dif)
+
+t <- seq(mu_50-3*sigma_50,mu_50+3*sigma_50, length=200)
+normal_dist <- pnorm(t, mean = mu_50, sd = sigma_50)
+max_dif <- max(abs(Fs_50(t) - normal_dist))
+print(max_dif)
+```
+
+As we can see, with bigger n we get less difference between two c.d.f.s
+
+### Part 3.
+
+#### Markov inequality
+
+$$
+P(X >= 8 * 10^8) <= \frac{\mu n}{(8 * 10^8)} <= 0.05
+$$
+
+$$
+\mu = 9594101, n <= \frac{0.05 * 8 * 10^8}\mu = \frac{0.05 * 8 * 10^8}{9594101} = 4.16922857
+$$
+
+#### Central limit theorem
+
+$$
+P(\frac{X_1 + X_2+...+X_n  - \mu n}{\sigma \sqrt n} <= t) \longrightarrow \Phi(t)
+$$
+
+$$
+t = \frac {8 * 10^8 - 9594101n}{\sqrt {9594101n}}
+$$
+
+$$
+\Phi(t) >= 0.95
+$$
+
+$$
+t >= \Phi^{-1}(0.95) = 1 - \Phi(0.95) = 0.1790561
+$$
+
+$$
+\frac {8 * 10^8 - 9594101n}{\sqrt {9594101n}} >= 0.1790561
+$$
+
+$$
+8 * 10^8 >= \sqrt {9594101n} + 9594101n
+$$
+
+$$
+n <= 83.38
+$$
+
+#### Chernoff inequality
+
+Chernoff inequality for poisson random variable:
+
+$$
+P(X>=t)<= \frac {e^{-\lambda}(e\lambda)^t}{t^t}
+$$
+
+$\lambda = \mu n = 9594101n$ , $t = 8 * 10^8$
+
+$$
+P(X>=8*10^8) <= \frac {e^{9594101n}*(9594101en)^{8*10^8}}{(8*10^8)^{8*10^8}} <= 0.05
+$$
+
+$$
+e^{9594101n}*n^{8*10^8} <= \frac {0.05 * (8*10^8)^{8*10^8}}{e^{8*10^8*9594101}}
+$$
+
+We don't know how to calculate that(((
+
+Search biggest n for which the total number of decays in one second is less than $8 \times 10^8$ with probability at least $0.95$. As we see the result is 83, the same as we found using central limit
+
+```{r}
+K <- 1000
+n <- 1
+while (TRUE){
+  sample_sums <- unname(colSums(matrix(rpois(n*K, lambda = mu), nrow=n)))
+  safe_probability = length(sample_sums[sample_sums < 8 * 10 ** 8]) / length(sample_sums)
+  if (safe_probability < 0.95){
+    break
+  }
+  n <- n + 1
+}
+print(n - 1)
+```
+
+### Task 3.
+
+#### In this task, we use the Central Limit Theorem approximation for continuous random variables.
+
+#### One of the devices to measure radioactivity level at a given location is the Geiger counter. When the radioactive level is almost constant, the time between two consecutive clicks of the Geiger counter is an exponentially distributed random variable with parameter $\nu_1 = \mathtt{team\,id\,number} + 10$. Denote by $X_k$ the random time between the $(k-1)^{\mathrm{st}}$ and $k^{\mathrm{th}}$ click of the counter.
+
+-   Show that the distribution of the sample means of $X_1, X_2,\dots,X_n$ gets very close to a normal one (which one?) as $n$ becomes large. To this end,
+
+    -   simulate the realizations $x_1,x_2,\dots,x_n$ of the \textbf{r.v.} $X_i$ and calculate the sample mean $s=\overline{\mathbf{x}}$;\
+    -   repeat this $K$ times to get the sample $\mathbf{s}=(s_1,\dots,s_K)$ of means and then the \emph{empirical cumulative distribution} function $F_{\mathbf{s}}$ of $\mathbf{s}$;\
+    -   identify $\mu$ and $\sigma^2$ such that the \textbf{c.d.f.} of $\mathscr{N}(\mu,\sigma^2)$ is close to the \textbf{e.c.d.f.} $F_{\mathbf{s}}$ of and plot both \textbf{c.d.f.}'s on one graph to visualize their proximity;\
+    -   calculate the maximal difference between the two \textbf{c.d.f.}'s;\
+    -   consider cases $n = 5$, $n = 10$, $n=50$ and comment on the results.
+
+-   The place can be considered safe when the number of clicks in one minute does not exceed $100$. It is known that the parameter $\nu$ of the resulting exponential distribution is proportional to the number $N$ of the radioactive samples, i.e., $\nu = \nu_1*N$, where $\nu_1$ is the parameter for one sample. Determine the maximal number of radioactive samples that can be stored in that place so that, with probability $0.95$, the place is identified as safe. To do this,
+
+    -   express the event of interest in terms of the \textbf{r.v.} $S:= X_1 + \cdots + X_{100}$;\
+        S - time of one hundred clicks
+
+        P(S\>1) = 1 - P(S \<= 1)
+
+        -   obtain the theoretical bounds on $N$ using the Markov inequality, Chernoff bound and Central Limit Theorem and compare the results;
+
+            1)  Markov inequality
+
+                $$
+                E(S) = E(X1+X2+…+X100) = E(X1)+E(X2)+…+E(X100) \\
+                = 100 * 1/(13*N) = 7, 69 / N\\
+                P(S>1) = 0,95\\
+                P(S>1) <= E(S)/1  —>  0,95 <= 7,69 / N \\ 
+                N <= 769 / 95 \\ 
+                N = 8
+                $$
+
+            2)  Chernoff bound
+
+                $$
+                P(S>1)= e^{-t}M_s(t)\\
+                P(S>1) = e^{-t}(\frac{13N}{13N-t})^{100}\\
+                (e^{-t}(\frac{13N}{13N-t})^{100})' = 0\\
+                t=-100+13N\\
+                P(S>1) = e^{100-13N}(\frac{13N}{13N+100-13N})^{100} >= 0.95\\
+                e^{100-13N}(0,13N)^{100} >= 0.95\\
+                N<=7.94\\
+                N>=7.45
+                $$
+
+            3)  Central Limit Theorem
+
+                $$
+                P(\frac{S-n\mu}{\sqrt{n}\sigma}≥t) -> \Phi(t)\\
+                P(\frac{S - \frac{100}{13N}}{\frac{10}{13N}}≥\frac{1-\frac{100}{13N}}{\frac{10}{13N}})  -> \Phi(\frac{13N-100}{10})\\
+                \Phi(\frac{13N-100}{10}) ≥ 0.95\\
+                \frac{13N-100}{10}≥\Phi^{-1}(0.95) = 1 - \Phi(0.95)  = 1 - 0.83 = 0.17\\
+                \frac{13N-100}{10}≥0.17\\
+                N=7,823
+                $$
+
+    -   
+
+-   with the predicted $N$ and thus $\nu$, simulate the realization $x_1,x_2,\dots,x_{100}$ of the $X_i$ and of the sum $S = X_1 + \cdots + X_{100}$;
+
+-   repeat this $K$ times to get the sample $\mathbf{s}=(s_1,\dots,s_K)$ of total times until the $100^{\mathrm{th}}$ click;\
+
+    ```{r}
+    set.seed(id)
+    N <- 7
+    nu1 <- 13
+    nu <- N*nu1
+    K <- 1e3
+    n <- 100
+
+    S <- colSums(matrix(rexp(n*K, rate = nu), nrow=n))
+
+
+    ```
+
+    \
+
+-   estimate the probability that the location is identified as safe and compare to the desired level $0.95$
+
+    ```{r}
+    set.seed(id)
+    clicks <- rep(0, K)
+    for (i in 1:K) {
+      clicks[i] <-sum(rexp(n, rate = nu))
+    }
+    prob <- length(clicks[clicks>1]) / length(clicks)
+    prob
+    ```
+
+#### First, generate samples an sample means:
+
+```{r}
+set.seed(id)
+nu1 <- 13 
+K <- 1e3
+n <- 50
+sample_means <- colMeans(matrix(rexp(n*K, rate = nu1), nrow=n))
+
+```
+
+#### Next, calculate the parameters of the standard normal approximation
+
+```{r}
+mu <- mean(sample_means)       # change this!
+sigma <- sqrt(var(sample_means))    # change this!
+
+```
+
+#### We can now plot ecdf and cdf
+
+```{r}
+xlims <- c(mu-3*sigma,mu+3*sigma)
+Fs <- ecdf(sample_means)
+plot(Fs, 
+     xlim = xlims, 
+     col = "blue",
+     lwd = 2,
+     main = "Comparison of ecdf and cdf")
+
+curve(pnorm(x, mean = mu, sd = sigma), col = "red", lwd = 2, add = TRUE)
+x <- seq(min(sample_means), max(sample_means), by = .01)
+max(abs(ecdf(sample_means)(x)-pnorm(x, mean = mu, sd = sigma)))
+```
+
+**Next, proceed with all the remaining steps**
+
+```{r}
+max(abs(ecdf(sample_means)(x)-pnorm(x, mean = mu, sd = sigma)))
+```
+
+### General summary and conclusions
+
+During this lab assignment we completed 3 tasks that allowed us to better understand some properties of random variables. We understood where we can use this properties in real life problems and improve our knowledge about them. We also learnt some new terms for example: e.c.d.f. Besides, we improve our skills in programming on R and learnt a lot of useful features that are implemented in this programming language. That's interesting that you don't need to import functions like creating Poisson distribution from external libraries.
